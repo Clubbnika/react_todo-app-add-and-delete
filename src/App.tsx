@@ -7,11 +7,11 @@ import { getTodos } from './api/todos';
 import { Todo } from './types/Todo';
 import classNames from 'classnames';
 import * as postService from './api/todos';
+import { FilterParams } from './types/messages';
+import { ErrorMessages } from './types/messages';
 
 export const App: React.FC = () => {
   const [data, setData] = useState<Todo[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'All' | 'Active' | 'Completed'>('All');
   const [newTodoTitle, setNewTodoTitle] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isLoading, setLoading] = useState<boolean>(false);
@@ -19,6 +19,11 @@ export const App: React.FC = () => {
     data.filter(todo => !todo.completed).length,
   );
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const [filter, setFilter] = useState<FilterParams>(FilterParams.All);
+  const [errorMessage, setErrorMessage] = useState<ErrorMessages>(
+    ErrorMessages.None,
+  );
 
   useEffect(() => {
     const inputField = document.querySelector(
@@ -43,16 +48,16 @@ export const App: React.FC = () => {
   }, [isSubmitting]);
 
   useEffect(() => {
-    setErrorMessage(null);
+    setErrorMessage(ErrorMessages.None);
     getTodos()
       .then(setData)
-      .catch(() => setErrorMessage('Unable to load todos'));
+      .catch(() => setErrorMessage(ErrorMessages.OnGet));
   }, []);
 
   useEffect(() => {
-    if (errorMessage) {
+    if (errorMessage !== ErrorMessages.None) {
       const timer = setTimeout(() => {
-        setErrorMessage(null);
+        setErrorMessage(ErrorMessages.None);
       }, 3000);
 
       return () => clearTimeout(timer);
@@ -60,13 +65,14 @@ export const App: React.FC = () => {
   }, [errorMessage]);
 
   const filteredTodos = data.filter(todo => {
-    if (filter === 'Active') {
-      return !todo.completed;
-    } else if (filter === 'Completed') {
-      return todo.completed;
+    switch (filter) {
+      case FilterParams.Active:
+        return !todo.completed;
+      case FilterParams.Completed:
+        return todo.completed;
+      default:
+        return true;
     }
-
-    return true;
   });
 
   if (!USER_ID) {
@@ -75,7 +81,7 @@ export const App: React.FC = () => {
 
   function createTodo() {
     if (newTodoTitle.trim() === '') {
-      setErrorMessage('Title should not be empty');
+      setErrorMessage(ErrorMessages.OnEmptyTitle);
 
       return;
     }
@@ -109,7 +115,7 @@ export const App: React.FC = () => {
       })
       .catch(() => {
         setData(currentTodos => currentTodos.filter(todo => todo.id !== 0));
-        setErrorMessage('Unable to add a todo');
+        setErrorMessage(ErrorMessages.OnPost);
       })
       .finally(() => {
         setIsSubmitting(false);
@@ -137,7 +143,7 @@ export const App: React.FC = () => {
         );
 
         if (isSomeFailed) {
-          setErrorMessage('Unable to delete a todo');
+          setErrorMessage(ErrorMessages.OnDelete);
         }
 
         setData(currentTodos =>
@@ -145,9 +151,9 @@ export const App: React.FC = () => {
         );
       })
       .catch(() => {
-        setErrorMessage('Unable to delete completed todos');
+        setErrorMessage(ErrorMessages.OnDelete);
       })
-      .finally(() => {});
+      .finally(() => { });
 
     const inputField = document.querySelector(
       '.todoapp__new-todo',
@@ -168,7 +174,7 @@ export const App: React.FC = () => {
         setData(currentTodos => currentTodos.filter(todo => todo.id !== id));
       })
       .catch(() => {
-        setErrorMessage('Unable to delete a todo');
+        setErrorMessage(ErrorMessages.OnDelete);
       })
       .finally(() => {
         setLoading(false);
@@ -183,6 +189,15 @@ export const App: React.FC = () => {
       ),
     );
   }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const isEnterKey = e.key === 'Enter';
+
+    if (isEnterKey) {
+      e.preventDefault();
+      createTodo();
+    }
+  };
 
   return (
     <div className="todoapp">
@@ -208,12 +223,7 @@ export const App: React.FC = () => {
             placeholder="What needs to be done?"
             value={newTodoTitle}
             onChange={e => setNewTodoTitle(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                createTodo();
-              }
-            }}
+            onKeyDown={handleKeyDown}
             disabled={isSubmitting}
           />
         </header>
@@ -279,10 +289,10 @@ export const App: React.FC = () => {
               <a
                 href="#/"
                 className={classNames('filter__link', {
-                  selected: filter === 'All',
+                  selected: filter === FilterParams.All,
                 })}
                 data-cy="FilterLinkAll"
-                onClick={() => setFilter('All')}
+                onClick={() => setFilter(FilterParams.All)}
               >
                 All
               </a>
@@ -290,10 +300,10 @@ export const App: React.FC = () => {
               <a
                 href="#/active"
                 className={classNames('filter__link', {
-                  selected: filter === 'Active',
+                  selected: filter === FilterParams.Active,
                 })}
                 data-cy="FilterLinkActive"
-                onClick={() => setFilter('Active')}
+                onClick={() => setFilter(FilterParams.Active)}
               >
                 Active
               </a>
@@ -301,10 +311,10 @@ export const App: React.FC = () => {
               <a
                 href="#/completed"
                 className={classNames('filter__link', {
-                  selected: filter === 'Completed',
+                  selected: filter === FilterParams.Completed,
                 })}
                 data-cy="FilterLinkCompleted"
-                onClick={() => setFilter('Completed')}
+                onClick={() => setFilter(FilterParams.Completed)}
               >
                 Completed
               </a>
@@ -330,14 +340,14 @@ export const App: React.FC = () => {
           'is-danger',
           'is-light',
           'has-text-weight-normal',
-          { hidden: !errorMessage },
+          { hidden: errorMessage === ErrorMessages.None },
         )}
       >
         <button
           data-cy="HideErrorButton"
           type="button"
           className="delete"
-          onClick={() => setErrorMessage(null)}
+          onClick={() => setErrorMessage(ErrorMessages.None)}
           aria-label="Hide error notification"
         />
         {errorMessage}
